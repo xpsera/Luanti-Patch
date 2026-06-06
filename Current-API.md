@@ -1,69 +1,68 @@
+
+
+
+# Luanti Fork API Reference
+
 <div align="center">
 
 <img src="textures/base/pack/IMG_0039.png" width="50%">
 
-# **Fork APIs Guide**
-*A comprehensive reference for the extended Luanti API*
+# **Extended API Reference**
 
-[![License: LGPL-2.1+](https://img.shields.io/badge/license-LGPLv2.1%2B-blue.svg)](LICENSE.txt)
-[![API Version](https://img.shields.io/badge/API%20Version-52%2B-green.svg)](#1-player-synchronisation-improvements)
+*A complete guide to all custom APIs added by this fork*
+
+**API Version:** 52+ | **Platform:** Android
 
 ---
 
-> 📖 **This document covers all custom APIs and extensions added by this fork**
-> 
 > For core Luanti documentation, visit [docs.luanti.org](https://docs.luanti.org/)
 
 </div>
 
 ---
 
-## 📋 Table of Contents
+## Table of Contents
 
-1. [Player Synchronisation Improvements](#1-player-synchronisation-improvements)
+1. [Player Synchronisation](#1-player-synchronisation)
 2. [Camera API](#2-camera-api)
-3. [FOV (Field of View) API](#3-fov-field-of-view-api)
-4. [Android: htmlview API](#4-android-htmlview-api)
+3. [FOV Control](#3-fov-control)
+4. [Android: htmlview](#4-android-htmlview)
 5. [glTF Multi-Clip Animation](#5-gltf-multi-clip-animation)
-6. [Improved Animation & Scaling API](#6-improved-animation--scaling-api)
-7. [glTF Inspection Helpers](#7-gltf-inspection-helpers)
-8. [Independent Bone Transform API](#8-independent-bone-transform-api)
-9. [Bone Override API](#9-bone-override-api-undocumented)
-10. [Physics & Movement API](#10-physics--movement-api)
-11. [Accessibility Features](#11-accessibility-features)
-12. [Fog API](#12-fog-api)
-13. [World Switching API](#13-world-switching-api)
-14. [Player Callbacks](#14-player-callbacks)
-15. [Undocumented Extensions](#15-undocumented-extensions)
+6. [Animation & Scaling](#6-animation--scaling)
+7. [glTF Inspection](#7-gltf-inspection)
+8. [Bone Transform API](#8-bone-transform-api)
+9. [Physics & Movement](#9-physics--movement)
+10. [Accessibility](#10-accessibility)
+11. [Fog System](#11-fog-system)
+12. [World Management](#12-world-management)
+13. [Player Callbacks](#13-player-callbacks)
 
 ---
 
-## 1. Player Synchronisation Improvements
+## 1. Player Synchronisation
 
 ### Overview
 
-This fork introduces a dedicated network packet for updating look direction independently of position. Previously, calling `set_look_vertical` or `set_look_horizontal` triggered a full "teleport" packet that reset the player's position, effectively "freezing" the player if called frequently for smooth camera animations.
+This fork introduces a dedicated network packet for updating look direction independently of position. Previously, calling `set_look_vertical` or `set_look_horizontal` triggered a full "teleport" packet that reset the player's position, effectively "freezing" the player during smooth camera animations.
 
-### Improved Methods
+### Methods
 
 ```lua
 ObjectRef:set_look_vertical(radians)
 ObjectRef:set_look_horizontal(radians)
 ```
 
-| Feature | Description |
-|---------|-------------|
-| **New Behavior** | On supported clients (protocol version ≥ 52), these methods only sync look direction |
-| **Free Movement** | Player can continue moving freely while camera orientation is controlled by server |
-| **Backward Compatible** | Automatically falls back to teleport behavior for older clients |
+| Behavior | Description |
+|----------|-------------|
+| **Protocol ≥ 52** | Only syncs look direction, player can move freely |
+| **Older Clients** | Falls back to teleport behavior for compatibility |
 
 ### Example
 
 ```lua
--- Smooth camera animation (doesn't freeze player anymore!)
 minetest.register_globalstep(function(dtime)
     local time = minetest.get_gametime()
-    local pitch = math.sin(time * 2) * 0.3  -- Gentle bobbing
+    local pitch = math.sin(time * 2) * 0.3
     local player = minetest.local_player
     if player then
         player:set_look_vertical(pitch)
@@ -75,373 +74,242 @@ end)
 
 ## 2. Camera API
 
-### Overview
-
-Server-side `ObjectRef` methods for controlling the player's camera, including mode, tilt, and orientation smoothing.
-
-### Setting Camera State
+### set_camera
 
 ```lua
 ObjectRef:set_camera(table)
 ```
 
-**Parameters:**
-
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `mode` | string | - | Camera mode: `"firstperson"`, `"thirdpersonback"`, `"thirdpersonfront"` |
-| `free_look` | boolean | `false` | If `true`, server-forced orientation updates are applied additively to player's current orientation |
-| `smooth` | boolean | `false` | If `true`, orientation changes are smoothed (0.05s default window) even without cinematic mode |
+| `mode` | string | — | `"firstperson"`, `"thirdpersonback"`, `"thirdpersonfront"` |
+| `free_look` | boolean | `false` | Server orientation updates are applied additively |
+| `smooth` | boolean | `false` | Smooth orientation changes (0.05s window) |
 | `tilt` | number | `0` | Camera roll in degrees |
-| `anti_tilt_controller` | boolean | `false` | If `true`, controls stay fixed to screen even when camera is tilted. If `false`, controls rotate with camera |
-| `fov` | number | - | Field of View. Set to `0` to reset to client default |
-| `fov_is_multiplier` | boolean | `false` | If `true`, `fov` is treated as a multiplier for player's base FOV |
-| `fov_transition` | number | `0.0` | Smooth FOV transition duration in seconds |
+| `anti_tilt_controller` | boolean | `false` | Controls fixed to screen when camera is tilted |
+| `fov` | number | — | Field of View. `0` resets to default |
+| `fov_is_multiplier` | boolean | `false` | `fov` treated as base FOV multiplier |
+| `fov_transition` | number | `0.0` | Smooth FOV transition duration |
 
-### Getting Camera State
+### get_camera
 
 ```lua
 ObjectRef:get_camera() -> table
 ```
 
-**Returns:**
-```lua
-{
-    mode = "firstperson",
-    free_look = false,
-    smooth = false,
-    tilt = 0,
-    anti_tilt_controller = false,
-    fov = 0,
-    fov_is_multiplier = false,
-    fov_transition = 0
-}
-```
+Returns current camera state including all fields above.
 
-### Examples
+### send_mapblock
 
 ```lua
--- Cinematic camera with tilt
-player:set_camera({
-    mode = "thirdpersonback",
-    tilt = 15,  -- 15 degrees roll
-    smooth = true
-})
-
--- First person with wide FOV
-player:set_camera({
-    mode = "firstperson",
-    fov = 100,
-    fov_transition = 1.5  -- Smooth 1.5s transition
-})
+ObjectRef:send_mapblock(pos) -> boolean
 ```
+
+Forces sending a mapblock to the player. Returns `true` on success.
 
 ---
 
-## 3. FOV (Field of View) API
+## 3. FOV Control
 
-### Overview
-
-Explicit FOV control methods, both as standalone functions and part of the camera API.
-
-### Methods
+### set_fov
 
 ```lua
--- Set FOV
 ObjectRef:set_fov(degrees, is_multiplier?, transition_time?)
-
--- Get FOV
-ObjectRef:get_fov() -> table
 ```
-
-### Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `degrees` | number | required | FOV in degrees. `0` resets to client default |
-| `is_multiplier` | boolean | `false` | Treat value as a multiplier for base FOV |
-| `transition_time` | number | `0` | Smooth transition duration in seconds |
+| `degrees` | number | required | FOV in degrees. `0` resets |
+| `is_multiplier` | boolean | `false` | Treat as base FOV multiplier |
+| `transition_time` | number | `0` | Smooth transition duration |
 
-### Return Value
+### get_fov
 
 ```lua
-{
-    fov = 75.0,
-    is_multiplier = false,
-    transition_time = 0.5
-}
+ObjectRef:get_fov() -> {fov, is_multiplier, transition_time}
 ```
 
 ---
 
-## 4. Android: htmlview API
+## 4. Android: htmlview
 
 ### Overview
 
-Android-only HTML view system for creating rich UI elements using HTML/CSS/JavaScript. Includes support for headless workers, shared memory IPC, and capture functionality.
+Android-only HTML view system for creating rich UI elements. Destroyed when leaving a world.
 
-> ⚠️ **Platform Restriction**: On non-Android platforms, calling these functions throws an error.
+> **Platform Restriction:** Throws an error on non-Android platforms.
 
-> 💡 **Lifecycle**: HTMLViews are owned by the Android activity layout and are destroyed when leaving a world or stopping the server.
-
----
-
-### 4.1 Creating Instances
+### Creating Instances
 
 ```lua
--- Create from inline HTML
+-- Inline HTML
 htmlview.run(id, html_string)
 
--- Create from external HTML files
-htmlview.run_external(id, root_dir, entry?)
+-- External files
+htmlview.run_external(id, root_dir, entry?)  -- entry defaults to "index.html"
 ```
 
-**Parameters:**
-- `id`: Unique string identifier for the view
-- `html_string`: Inline HTML content
-- `root_dir`: Directory containing HTML files (sandbox-checked)
-- `entry`: Entry file name (default: `"index.html"`)
-
-### 4.2 Headless Workers
-
-Workers run without a visible view but still support messaging and JavaScript injection.
+### Headless Workers
 
 ```lua
 htmlview.run_worker(id, html_string)
 htmlview.run_external_worker(id, root_dir, entry?)
 ```
 
-**Supported Operations:**
-- ✅ `send`, `inject`, `navigate`, `on_message`, `on_message_json`
-- ❌ `display`, `focus` (ignored for workers)
+Workers support `send`, `inject`, `navigate`, `on_message`. `display`/`focus` are ignored.
 
-### 4.3 Display & Positioning
+### Display & Positioning
 
 ```lua
 htmlview.display(id, opts)
 ```
 
-**Options:**
-
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `visible` | boolean | `true` | Show or hide the view |
-| `safe_area` | boolean | `true` | Respect Android safe areas |
+| `visible` | boolean | `true` | Show or hide |
+| `safe_area` | boolean | `true` | Respect safe areas |
 | `fullscreen` | boolean | `false` | Fill entire screen |
-| `drag_embed` / `draggable` | boolean | `false` | Make view draggable |
-| `border_radius` | number | `0` | Corner radius in pixels (negative values clamped to 0) |
-| `x`, `y` | number/string | `0` | Position in pixels or `"center"` for centering |
-| `width`, `height` | number/string | `1` | Size in pixels or `"fullscreen"` (setting either to `"fullscreen"` is equivalent to `fullscreen = true`) |
+| `drag_embed` / `draggable` | boolean | `false` | Make draggable |
+| `border_radius` | number | `0` | Corner radius in pixels |
+| `x`, `y` | number/string | `0` | Position or `"center"` |
+| `width`, `height` | number/string | `1` | Size in pixels or `"fullscreen"` |
 
-### 4.4 Focus Management
-
-```lua
-htmlview.focus(id)
-```
-Brings the specified HTMLView to the front when multiple are open.
-
-### 4.5 Stopping Views
+### Focus & Control
 
 ```lua
-htmlview.stop(id)
+htmlview.focus(id)   -- Bring to front
+htmlview.stop(id)    -- Destroy instance
 ```
-Destroys the HTMLView instance and releases resources.
 
-### 4.6 Messaging
+### Messaging
 
 ```lua
--- Send raw string message
-htmlview.send(id, message)
-
--- Send JSON-encoded Lua value
-htmlview.send_json(id, value)
-
--- Register plain string message callback
-htmlview.on_message(id, function(message) end)
-
--- Register JSON message callback
-htmlview.on_message_json(id, function(decoded_table, raw_string) end)
--- On success: callback(decoded_table, raw_string)
--- On parse error: callback(nil, raw_string, error_string)
-
--- Register ready callback (fired after onPageFinished)
-htmlview.on_ready(id, function() end)
-
--- Forward messages between views
-htmlview.pipe(from_id, to_id)
+htmlview.send(id, message)              -- Raw string
+htmlview.send_json(id, value)           -- JSON-encoded Lua value
+htmlview.on_message(id, cb)             -- cb(message_string)
+htmlview.on_message_json(id, cb)        -- cb(decoded_table, raw_string) or cb(nil, raw_string, error)
+htmlview.on_ready(id, cb)               -- cb() after onPageFinished
+htmlview.pipe(from_id, to_id)           -- Forward messages
 ```
 
-### 4.7 Navigation & JavaScript
+### Navigation & JavaScript
 
 ```lua
-htmlview.navigate(id, url)    -- Navigate to URL
-htmlview.inject(id, js)       -- Execute arbitrary JavaScript
-htmlview.reload(id)           -- Reload without destroying instance
+htmlview.navigate(id, url)
+htmlview.inject(id, js)
+htmlview.reload(id)  -- Reload without destroying
 ```
 
-**Reload Behavior:**
-- `run_external*`: Reloads the current entry file
-- `run*`: Reloads the last provided HTML
+### Shared Memory IPC
 
-### 4.8 Shared Memory IPC
-
-Zero-overhead data exchange between HTMLView workers and Lua. Useful for high-frequency data sharing without message serialization overhead.
-
-**Lua Side:**
 ```lua
-htmlview.shared_set(key, val)  -- Set value (must be string or nil)
-htmlview.shared_get(key)       -- Get value, returns nil if not found or empty string
-```
+-- Lua side
+htmlview.shared_set(key, val)  -- val must be string or nil
+htmlview.shared_get(key)       -- Returns nil if not found or empty
 
-**JavaScript Side:**
-```javascript
+-- JavaScript side
 luanti.shared_set(key, val);
 luanti.shared_get(key);  // Returns string or null
 ```
 
-> ⚠️ Note: `val` must be a string or `nil`. Non-string values must be serialized before calling.
-
-### 4.9 Capture
+### Capture
 
 ```lua
-htmlview.capture(id, opts?)
+htmlview.capture(id, {width?, height?})  -- Defaults to natural size
+htmlview.on_capture(id, cb)              -- cb(png_bytes)
 ```
 
-**Options:**
-- `width`: Capture width (default: 0 = view's natural size)
-- `height`: Capture height (default: 0 = view's natural size)
-- Negative values are clamped to 0
+### Input Control
 
 ```lua
-htmlview.on_capture(id, function(png_bytes) end)
--- png_bytes is a Lua string containing PNG file data
+htmlview.input(id, {block_game_input = boolean})
 ```
 
-### 4.10 Input Control
+When enabled, touches outside the view are swallowed.
+
+### State Query
 
 ```lua
-htmlview.input(id, {
-    block_game_input = boolean  -- Default: false
-})
-```
-
-When enabled and the view is visible, touches outside the HTMLView are swallowed, preventing interaction with the world behind it.
-
-### 4.11 State Query
-
-```lua
-htmlview.state(id) -> table | nil
-```
-
-Returns `nil` on error, on non-Android platforms, or if JSON parsing fails. Otherwise:
-```lua
-{
-    exists = true,
-    worker = false,
-    visible = true,
-    ready = true  -- true after onPageFinished
+htmlview.state(id) -> {
+    exists = boolean,
+    worker = boolean,
+    visible = boolean,
+    ready = boolean  -- after onPageFinished
 }
 ```
+
+Returns `nil` on error or non-Android.
 
 ---
 
 ## 5. glTF Multi-Clip Animation
 
-### Overview
-
-glTF/GLB meshes can contain multiple named animations. This fork loads each glTF `animations[i]` as a selectable clip, enabling complex animation state machines.
-
-### Setting Animation
+### set_animation
 
 ```lua
--- Legacy positional form (clears any selected clip)
+-- Legacy positional form (clears selected clip)
 ObjectRef:set_animation(frame_range, frame_speed, frame_blend, frame_loop)
 
--- New table form (recommended)
+-- Table form (recommended)
 ObjectRef:set_animation(opts)
 ```
 
-**Options Table:**
-
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `clip` | number/string | - | Clip index (0-based) or clip name from glTF file |
-| `range` / `frame_range` | `{x, y}` | - | Animation frame range |
-| `frame` | number | - | Set `{frame, frame}` for single frame pose |
-| `speed` / `frame_speed` | number | - | Animation speed |
-| `speed_scale` | number | `1.0` | Speed multiplier applied after `speed` |
-| `blend` / `frame_blend` | number | `0.1` | Crossfade blend duration in seconds |
-| `loop` / `frame_loop` | boolean | - | Loop the animation |
-| `pause` / `paused` | boolean | - | Pause the animation (sets speed to 0) |
-| `time_mode` | string | `"auto"` | Time unit handling (see Enhanced Animation API) |
+| `clip` | number/string | — | Clip index (0-based) or name |
+| `range` / `frame_range` | `{x, y}` | — | Frame range |
+| `frame` | number | — | Single frame `{f, f}` |
+| `speed` / `frame_speed` | number | — | Animation speed |
+| `speed_scale` | number | `1.0` | Speed multiplier |
+| `blend` / `frame_blend` | number | `0.1` | Crossfade duration (seconds) |
+| `loop` / `frame_loop` | boolean | — | Loop the animation |
+| `pause` / `paused` | boolean | — | Pause (speed = 0) |
+| `time_mode` | string | `"auto"` | See Animation & Scaling section |
 
-### Explicit Clip Selection
+### set_animation_clip
 
 ```lua
 ObjectRef:set_animation_clip(clip, frame_range, frame_speed, frame_blend, frame_loop)
 ```
-- `clip` can be a number (0-based index) or string (clip name)
 
-### Getting Animation Info
+Explicit clip selection. `clip` can be index or name.
+
+### set_animation_frame_speed
+
+```lua
+ObjectRef:set_animation_frame_speed(speed)
+```
+
+Directly sets animation speed without changing other parameters.
+
+### get_animation
 
 ```lua
 ObjectRef:get_animation() -> frame_range, frame_speed, frame_blend, frame_loop, clip
 ```
-Returns five values. `clip` is a number (index), string (name), or `nil` if no clip selected.
+
+Returns five values. `clip` is number, string, or `nil`.
+
+### get_animation_info
 
 ```lua
-ObjectRef:get_animation_info() -> table
-```
-
-**Returns:**
-```lua
-{
-    range = {x = 0, y = 100},
-    speed = 30.0,
-    blend = 0.1,
-    loop = true,
-    clip = "Walk",           -- number, string, or nil
-    duration = 3.33,         -- seconds (0 if speed is zero or range is degenerate)
-    progress = nil,          -- placeholder (not currently available)
-    bones = nil,             -- placeholder (not currently available)
-    is_gltf = true,
-    unit = "seconds"         -- "seconds" or "frames"
+ObjectRef:get_animation_info() -> {
+    range = {x, y},
+    speed = number,
+    blend = number,
+    loop = boolean,
+    clip = number|string|nil,
+    duration = number,  -- seconds (0 if speed is zero)
+    progress = nil,     -- placeholder
+    bones = nil,        -- placeholder
+    is_gltf = boolean,
+    unit = "seconds"|"frames"
 }
-```
-
-### Crossfade Blending
-
-For skinned meshes (including glTF), `frame_blend` controls crossfade duration when switching animations, enabling smooth transitions between animation states.
-
-### Examples
-
-```lua
--- Play a named clip
-entity.object:set_animation({
-    clip = "Run",
-    speed = 1.0,
-    loop = true
-})
-
--- Play frame range from a specific clip
-entity.object:set_animation({
-    clip = 2,  -- Third clip by index
-    range = {x = 10, y = 50},
-    speed = 24.0,
-    blend = 0.2
-})
-
--- Pause animation
-entity.object:set_animation({pause = true})
 ```
 
 ---
 
-## 6. Improved Animation & Scaling API
-
-### Overview
-
-Automatic model scaling and unified time handling between different model formats (glTF vs B3D/X).
+## 6. Animation & Scaling
 
 ### Scaling Properties
 
@@ -449,123 +317,85 @@ Set via `ObjectRef:set_properties()`:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `auto_normalize` | boolean | If `true`, engine measures model's actual size and scales it so 1 unit in file = 1 node in game |
-| `target_height` | number | Forces the model to a specific height in nodes regardless of original export size |
-| `model_unit_scale` | vector | Additional multiplier applied after normalization. Useful for making model wider/thinner without changing height |
+| `auto_normalize` | boolean | 1 unit in file = 1 node in game |
+| `target_height` | number | Force model to specific height in nodes |
+| `model_unit_scale` | vector | Additional multiplier after normalization |
 
-**Example:**
 ```lua
 entity.object:set_properties({
     visual = "mesh",
     mesh = "character.gltf",
-    auto_normalize = true,     -- 1 unit in file = 1 node in game
-    target_height = 1.7,       -- Force character to be exactly 1.7 nodes tall
-    model_unit_scale = {x = 1, y = 1, z = 1}  -- No extra scaling
+    auto_normalize = true,
+    target_height = 1.7,
+    model_unit_scale = {x = 1, y = 1, z = 1}
 })
 ```
 
-### Enhanced Animation Time Mode
+### Time Mode
 
-glTF animations use seconds for their range, while older formats use frames. The `set_animation` API now handles this automatically:
+glTF uses seconds; older formats use frames. Use `time_mode` in `set_animation`:
 
-```lua
-ObjectRef:set_animation({
-    range = {x = 0, y = 2.0},  -- 2 seconds regardless of format
-    speed = 1.0,
-    time_mode = "auto"  -- or "seconds" or "frames"
-})
-```
-
-| Mode | glTF Behavior | B3D/X Behavior |
-|------|---------------|----------------|
-| `"auto"` (default) | Uses seconds | Uses frames (default speed 15.0). Prints warning if speed > 5.0 |
-| `"seconds"` | Uses seconds | Auto-converts to frames using 24 FPS |
-| `"frames"` | Auto-converts to seconds using 24 FPS | Uses frames |
+| Mode | glTF | B3D/X |
+|------|------|-------|
+| `"auto"` (default) | Seconds | Frames. Warning if speed > 5.0 |
+| `"seconds"` | Seconds | Converts using 24 FPS |
+| `"frames"` | Converts using 24 FPS | Frames |
 
 ### Model Introspection
 
 ```lua
-ObjectRef:get_model_info() -> table
-```
-
-**Returns:**
-```lua
-{
-    mesh = "character.gltf",
-    format = "gltf",    -- "gltf" or "b3d"
-    uses_time = true,   -- true if model uses seconds natively (glTF)
-    default_speed = 1.0 -- glTF: 1.0, others: 15.0
+ObjectRef:get_model_info() -> {
+    mesh = string,
+    format = "gltf"|"b3d",
+    uses_time = boolean,
+    default_speed = number
 }
 ```
 
 ### Engine Fixes
 
-- ✅ Fixed "Tiny Model" bug with degenerate frame ranges (where x ≈ y)
-- ✅ Cleaner glTF clip transitions (disabled interpolation across different clips)
-- ✅ Safety warnings for high speed values with glTF in "auto" mode
+- Fixed "Tiny Model" bug with degenerate frame ranges
+- Cleaner glTF clip transitions
+- Safety warnings for high speed with glTF
 
 ---
 
-## 7. glTF Inspection Helpers
+## 7. glTF Inspection
 
-### Overview
-
-Server-side glTF file parsing without loading the model into the game. Useful for building animation selection UIs or validating model contents.
-
-### Getting Animation Clips
+### gltf_get_animation_clips
 
 ```lua
 core.gltf_get_animation_clips(path) -> list | nil, error_string
 ```
 
-**On success, returns:**
-```lua
-{
-    {index = 0, name = "Walk", start = 0.0, end = 2.5, duration = 2.5},
-    {index = 1, name = "Run", start = 0.0, end = 1.8, duration = 1.8},
-    ...
-}
-```
+Returns: `{{index, name, start, end, duration}, ...}`
 
-- `start` is always `0.0`
-- `end` and `duration` are equal and reflect measured clip length
-
-### Inspecting Full Structure
+### gltf_inspect
 
 ```lua
 core.gltf_inspect(path) -> table | nil, error_string
 ```
 
-**On success, returns:**
+Returns:
 ```lua
 {
-    meshes = {
-        {index = 0, name = "Body", primitives = 1},
-        {index = 1, name = "Head", primitives = 2}
-    },
-    bones = {
-        {node = 12, name = "Bone"},
-        {node = 15, name = "Bone.001"}
-        -- Note: Order is non-deterministic (built from hash set)
-    },
-    animations = {
-        {index = 0, name = "Walk", start = 0.0, end = 2.5, duration = 2.5},
-        ...
-    }
+    meshes = {{index, name, primitives}, ...},
+    bones = {{node, name}, ...},      -- Order non-deterministic
+    animations = {{index, name, start, end, duration}, ...}
 }
 ```
 
-> ⚠️ Both functions are subject to the engine's secure path check.
+> Subject to secure path check.
 
 ---
 
-## 8. Independent Bone Transform API
+## 8. Bone Transform API
 
 ### Overview
 
-Per-bone transform control with independent position, rotation, and scale. Each transform type is stored and synced separately—calling `set_bone_rotation` only updates rotation without affecting position or scale overrides.
+Per-bone transform control with independent position, rotation, and scale. Each type is stored separately—`set_bone_rotation` only updates rotation without affecting position or scale.
 
-### Setting Bone Transforms
+### Setting Transforms
 
 ```lua
 ObjectRef:set_bone_position(bone, position, opts?)
@@ -573,16 +403,10 @@ ObjectRef:set_bone_rotation(bone, rotation, opts?)
 ObjectRef:set_bone_scale(bone, scale, opts?)
 ```
 
-**Arguments:**
-- `bone`: String name of the bone
-- `position/rotation/scale`: Table `{x, y, z}` or three separate numbers. `set_bone_scale` also supports a single number for uniform scaling.
-- `opts`: Optional table with:
-  - `absolute`: boolean (default `false`). If `true`, replaces animation transform entirely. If `false`, adds on top (ideal for head look and additive overrides).
-  - `interpolation`: float (default `0.0`, or bone's persistent smooth value if set). Smooth transition duration in seconds.
+- `position/rotation/scale`: Table `{x, y, z}` or three numbers. `set_bone_scale` accepts single number for uniform scaling.
+- `opts`: `{absolute = bool, interpolation = float}` (degrees for rotation)
 
-**Rotation Units:** Degrees (converted internally to/from radians)
-
-### Getting Bone Transforms
+### Getting Transforms
 
 ```lua
 ObjectRef:get_bone_position(bone) -> vector
@@ -597,380 +421,205 @@ ObjectRef:get_bone_world_pos(bone) -> vector
 ObjectRef:set_part_visible(bone, visible)
 ```
 
-**Example:**
 ```lua
--- Hide helmet bone/part
-player:set_part_visible("Helmet", false)
-
--- Show it again later
-player:set_part_visible("Helmet", true)
+player:set_part_visible("Helmet", false)  -- Hide
+player:set_part_visible("Helmet", true)   -- Show
 ```
-
-On the client, hidden bones call `setVisible(false)`, which preserves the bone's actual scale state for when it is shown again (superior to scaling to zero).
 
 ### Persistent Smoothing
 
 ```lua
-ObjectRef:set_part_smooth(bone, table)
+ObjectRef:set_part_smooth(bone, {
+    position = float,
+    rotation = float,
+    scale = float
+})
 ```
 
-Sets default interpolation durations for a bone. When you call `set_bone_position/rotation/scale` without an explicit `interpolation` duration, these stored values are used as defaults.
+Sets default interpolation durations used when `set_bone_*` lacks explicit `interpolation`.
 
-**Table fields:**
-- `position`: Duration in seconds for position changes
-- `rotation`: Duration in seconds for rotation changes
-- `scale`: Duration in seconds for scale changes
+### Full Bone Override
 
----
-
-## 9. Bone Override API (Undocumented)
-
-### Overview
-
-Comprehensive bone override control that can set position, rotation, scale, visibility, color, glow, AND smooth durations all at once. This is the low-level API behind the convenience functions.
-
-### Setting Full Bone Override
+Comprehensive control for position, rotation, scale, visibility, color, glow, and smooth durations.
 
 ```lua
-ObjectRef:set_bone_override(bone, override_table?)
+ObjectRef:set_bone_override(bone, {
+    position = {vec = {x, y, z}, interpolation = float, absolute = bool},
+    rotation = {vec = {x, y, z}, interpolation = float, absolute = bool},
+    scale = {vec = {x, y, z}, interpolation = float, absolute = bool},
+    visible = boolean,
+    pos_smooth = float,
+    rot_smooth = float,
+    scale_smooth = float,
+    color = ColorSpec,    -- e.g. "#FFFFFFFF"
+    glow = float
+})
 ```
-
-**Override Table Fields:**
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `position` | table | `{vec = {x,y,z}, interpolation = float, absolute = bool}` |
-| `rotation` | table | `{vec = {x,y,z}, interpolation = float, absolute = bool}` (degrees) |
-| `scale` | table | `{vec = {x,y,z}, interpolation = float, absolute = bool}` |
-| `visible` | boolean | `true` to show, `false` to hide |
-| `pos_smooth` | float | Default smoothing duration for position |
-| `rot_smooth` | float | Default smoothing duration for rotation |
-| `scale_smooth` | float | Default smoothing duration for scale |
-| `color` | ColorSpec | ARGB color for the bone (e.g., `"#FFFFFFFF"`) |
-| `glow` | float | Glow effect intensity |
-
-### Getting Bone Override
 
 ```lua
 ObjectRef:get_bone_override(bone) -> override_table
-```
-
-Returns the full override state for a specific bone.
-
-### Getting All Bone Overrides
-
-```lua
 ObjectRef:get_bone_overrides() -> {bonename = override_table, ...}
 ```
 
-Returns a table containing all bone overrides currently set.
-
 ---
 
-## 10. Physics & Movement API
+## 9. Physics & Movement
 
-### Overview
-
-Enhanced physics control with new node groups and improved movement parameters.
-
-### Setting Physics Override
+### set_physics_override
 
 ```lua
 ObjectRef:set_physics_override(table)
 ```
 
-**Parameters:**
-
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `speed` | number | `1.0` | Overall speed multiplier |
+| `speed` | number | `1.0` | Speed multiplier |
 | `jump` | number | `1.0` | Jump strength multiplier |
 | `gravity` | number | `1.0` | Gravity multiplier |
 | `liquid_sink` | number | `1.0` | Liquid sink rate multiplier |
 | `liquid_sink_force` | number | `1.0` | Liquid sink force multiplier |
-| `sneak` | boolean | `true` | Enable/disable sneaking |
-| `sneak_glitch` | boolean | `false` | Enable legacy sneak-up-ledge glitch |
+| `sneak` | boolean | `true` | Enable sneaking |
+| `sneak_glitch` | boolean | `false` | Enable legacy sneak glitch |
 | `new_move` | boolean | `true` | Enable new movement code |
-| `auto_climb` | boolean | `false` | Enable auto-climb and auto-descend on ladders |
+| `auto_climb` | boolean | `false` | Auto-climb/descend on ladders |
 
 ### Node Groups
 
 | Group | Description |
 |-------|-------------|
-| `group:lava` | Adding this to a node definition automatically enables high-viscosity "Lava Physics" |
-| `group:disable_jump` | Prevents jumping while standing on or in the node |
-
-### Examples
-
-```lua
--- Super jump mode
-player:set_physics_override({
-    jump = 2.5,
-    gravity = 0.5
-})
-
--- Classic mode with sneak glitch
-player:set_physics_override({
-    new_move = false,
-    sneak_glitch = true
-})
-
--- Reduced liquid physics
-player:set_physics_override({
-    liquid_sink = 0.5,
-    liquid_sink_force = 0.3
-})
-```
+| `group:lava` | Enables high-viscosity "Lava Physics" |
+| `group:disable_jump` | Prevents jumping on/in the node |
 
 ---
 
-## 11. Accessibility Features
+## 10. Accessibility
 
 ### Accessibility Sprint Toggle
 
-An accessibility setting that gates the engine's internal joystick-driven speed boost, allowing players who prefer a consistent walking speed to disable automatic sprint.
-
-### How It Works
-
-- **Logic Gate**: The movement physics have been modified. Previously, the engine hard-coded a 1.3x speed multiplier when joystick magnitude ≥ 0.95. Now, this multiplier only activates if `accessibilitysprintenabled` is `true`.
-- **Reactive UI**: The toggle in the Accessibility menu under Movement updates in real-time without needing a restart.
-- **Robustness**: Defaults to `true` (original behavior) if setting is missing from `minetest.conf`.
-
-### API Access
+Gates the joystick-driven speed boost (1.3x when magnitude ≥ 0.95).
 
 ```lua
--- Lua API (mods and main menu)
-local sprint_enabled = core.settings:get_bool("accessibilitysprintenabled")
-
--- C++ API (engine internal)
-player_settings.accessibility_sprint_enabled  // Boolean
+core.settings:get_bool("accessibilitysprintenabled")
 ```
+
+Defaults to `true`. Updates in real-time from Accessibility menu.
 
 ---
 
-## 12. Fog API
+## 11. Fog System
 
-### Overview
-
-Extended volumetric and height-based fog controls with biome integration.
-
-### Setting Fog Parameters
+### set_fog
 
 ```lua
 core.set_fog(player, params_or_nil)
 ```
 
-Pass `nil` to clear custom fog. `params` table:
+Pass `nil` to clear.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `color` | ColorSpec | Fog color (default: sky fog color) |
-| `fog_start` | number (0..0.99) | Fraction of view distance. Negative value leaves at engine default |
-| `fog_end` | number (0..1) | Fraction of view distance. Negative value leaves at engine default. Clamped ≥ fog_start |
-| `blend_time` | number | Transition duration in seconds (clamped ≥ 0) |
-| `max_density` | number (0..1) | Opacity at max height (clamped) |
+| `color` | ColorSpec | Fog color |
+| `fog_start` | number (0..0.99) | Fraction of view distance |
+| `fog_end` | number (0..1) | Fraction of view distance |
+| `blend_time` | number | Transition duration |
+| `max_density` | number (0..1) | Opacity at max height |
 | `max_density_height` | number | Node-space height for max density |
-| `zero_density_height` | number | Node-space height where fog disappears |
-| `uniform` | boolean | If true, ignores height density |
-| `direction` | v3f | Up vector for height calculation (default `{x=0,y=1,z=0}`, normalized automatically) |
-| `turbulence` | number (0..1) | Noise factor (clamped) |
-| `speed_density_scale` | number | Density based on player speed (clamped ≥ 0) |
-| `layers` | array | Up to 4 extra fog layer tables (excess silently dropped). Each supports: `color`, `max_density`, `max_density_height`, `zero_density_height`, `uniform`, `direction` |
+| `zero_density_height` | number | Height where fog disappears |
+| `uniform` | boolean | Ignore height density |
+| `direction` | v3f | Up vector for height calculation |
+| `turbulence` | number (0..1) | Noise factor |
+| `speed_density_scale` | number | Density based on speed |
+| `layers` | array | Up to 4 extra fog layers |
 | `color_transition` | table | Dynamic color animation |
 
-**color_transition table:**
-- `speed`: Animation speed (clamped ≥ 0)
-- Up to 8 keyframes (excess dropped), provided as array or in `keyframes` sub-array:
-  - `{time = number(0..1), color = ColorSpec}`
-- Keyframes are automatically sorted by time
-
-### Fog Boundary
+### set_fog_boundary
 
 ```lua
 core.set_fog_boundary(player, params_or_nil)
 ```
 
-Defines a localized fog zone. Pass `nil` to clear.
-
-**Parameters:**
+Defines localized fog zone.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `pos` | v3f | Center of the zone |
-| `radius` | number | Node-space size (clamped ≥ 0) |
-| `shape` | string | `"sphere"` (default), `"box"`, `"cylinder"` |
-| `fog` | table | FogParams structure |
-| `sound` | table | Optional ambient sound inside zone |
+| `pos` | v3f | Center of zone |
+| `radius` | number | Node-space size |
+| `shape` | string | `"sphere"`, `"box"`, `"cylinder"` |
+| `fog` | table | FogParams |
+| `sound` | table | `{name, gain, fade_in}` |
 
-**sound table:**
-- `name`: string
-- `gain`: number (clamped ≥ 0)
-- `fade_in`: number (seconds, clamped ≥ 0)
-
-### Biome Atmosphere
+### register_biome_atmosphere
 
 ```lua
 core.register_biome_atmosphere(biome_id, params)
 ```
 
-Registers fog and/or boundary parameters for a specific biome.
+Registers fog/boundary for a biome.
 
 ---
 
-## 13. World Switching API
+## 12. World Management
 
-### Overview
-
-Automatically leave the current world and join another by name.
-
-### Client-Side World Switch
+### Client-Side
 
 ```lua
 core.world_switch(worldname)
 ```
 
-- Only works for local worlds
-- Automatically disconnects and joins target world
+Only works for local worlds.
 
-### Server-Side World Switch
+### Server-Side
 
 ```lua
 minetest.world_switch(playername, worldname)
 ```
 
-- Sends request to client to switch worlds
-- Only works if client has target world locally
+Sends request to client.
 
-### Creating Worlds
+### create_world
 
 ```lua
 core.create_world(name, gameid, options) -> success, path_or_error
 ```
 
-**Parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `name` | string | The name of the world to create |
-| `gameid` | string | The game ID to use (e.g., `"minetest"`) |
-| `options` | table | Optional settings |
-
-**Options:**
-
 | Option | Type | Description |
 |--------|------|-------------|
 | `seed` | string/number | World seed |
-| `mg_name` | string | Map generator (e.g., `"v7"`, `"flat"`) |
-| `visible` | string | `"visible"` or `"hidden"` in world list |
-| `synchronizes` | string | World name or absolute path to sync data with (players, inventory, auth, mod storage) |
-| `mods` / `worldmods` | table/string | Mods to enable or copy |
+| `mg_name` | string | Map generator |
+| `visible` | string | `"visible"` or `"hidden"` |
+| `synchronizes` | string | World to sync data with |
+| `mods` / `worldmods` | table/string | Mods to enable/copy |
 
 **Mod Options:**
-- String: Treated as directory path, contents expanded into `worldmods/`
+- String: Directory path, contents expanded to `worldmods/`
 - Array: `{"mod1", "mod2"}` enables global mods
-- Table with booleans: `{mod1 = true, mod2 = false}`
-- Table with paths: `{my_submod = "custom_mod_dir"}` copies mod directory into `worldmods/` as `my_submod`
+- Table with booleans: `{mod = true, mod2 = false}`
+- Table with paths: `{name = "path"}` copies mod as `name`
 
-**Any other key-value pair is written directly to the `world.mt` file.**
+Any other key-value writes directly to `world.mt`.
 
-### Getting Synchronized Path
+### get_synchronized_worldpath
 
 ```lua
 core.get_synchronized_worldpath() -> string | nil
 ```
 
-Returns absolute path to the world being synchronized with, or `nil` if synchronization is not enabled.
-
-### Examples
-
-```lua
--- Create world with custom mods and settings
-local success, result = core.create_world("MyWorld", "minetest", {
-    seed = "12345",
-    mg_name = "v7",
-    -- 'worldmods' is an alias for 'mods'. Both can be used and are additive.
-    worldmods = "bundled_mods",  -- Expands all mods in "my_mod/bundled_mods/"
-    mods = {
-        default = true,  -- Enable a global mod
-        -- Specifically copy "my_mod/custom_mod_dir/" as "my_submod"
-        ["my_submod"] = "custom_mod_dir"
-    },
-    creative_mode = "true"  -- Arbitrary world.mt setting
-})
-
-if success then
-    minetest.chat_send_all("World created at: " .. result)
-else
-    minetest.chat_send_all("Error: " .. result)
-end
-```
-
 ---
 
-## 14. Player Callbacks
-
-### Jump Callback
+## 13. Player Callbacks
 
 ```lua
 core.register_on_jump(function(player))
-    -- player: ObjectRef of the player who jumped
-end)
-```
+-- Fired when player jumps
 
-Fired when a player performs a jump.
-
-### Land Callback
-
-```lua
 core.register_on_land(function(player))
-    -- player: ObjectRef of the player who landed
-end)
+-- Fired when player lands after being airborne
 ```
-
-Fired when a player touches the ground after being in the air.
-
----
-
-## 15. Undocumented Extensions
-
-### Overview
-
-The following functions exist in the codebase but are not yet fully documented.
-
-> ⚠️ **Warning**: These APIs may be incomplete or subject to change.
-
----
-
-### Animation Speed Helper
-
-```lua
-ObjectRef:set_animation_frame_speed(speed)
-```
-
-Directly sets the animation speed without changing other animation parameters (range, blend, loop, clip).
-
----
-
-### Network Helper
-
-```lua
-ObjectRef:send_mapblock(pos) -> boolean
-```
-
-Forces sending a mapblock to the player. Returns `true` on success, `false` otherwise.
-
----
-
-## 📜 License
-
-This fork follows the same LGPL-2.1+ license as Luanti. See [COPYING.LESSER](COPYING.LESSER) for details.
 
 ---
 
 <div align="center">
 
 **Last Updated:** June 2026
-
-*This documentation covers fork-specific APIs only. For core Luanti API documentation, visit [docs.luanti.org](https://docs.luanti.org/)*
 
 </div>
