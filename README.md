@@ -2,4 +2,4 @@
 Official Patched by ***xpusera***
 
 
-**Pre-release:** (https://github.com/xpsera/Luanti-Patch/releases/tag/Prototype)[Here]
+**Pre-release:** https://github.com/xpsera/Luanti-Patch/releases/tag/Prototype
