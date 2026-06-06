@@ -5,7 +5,7 @@
 
 <div align="center">
 
-![Luanti](textures/base/pack/logo.png width="30%")
+<img src="textures/base/pack/IMG_0033.png" width="30%">
 
 # **Fork APIs Guide**
 *A comprehensive reference for the extended Luanti API*
