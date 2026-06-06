@@ -1,8 +1,3 @@
-
-
-
-# 🚀 Luanti Fork API Documentation
-
 <div align="center">
 
 <img src="textures/base/pack/IMG_0039.png" width="50%">
