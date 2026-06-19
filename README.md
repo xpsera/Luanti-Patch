@@ -3,6 +3,7 @@
  <div align="center">
 
 <img src="textures/base/pack/IMG_0039.png" width="50%">
+
 **A modified version of Luanti maintained by xpusera.**
  
 This build includes custom mechanics, features, and engine changes. While most features have been tested by the developer, the project has not yet received extensive testing from the wider modding community. Bugs, compatibility issues, and unfinished behavior may still exist.
